@@ -1,0 +1,313 @@
+/* =========================================================
+   项目详情弹窗（全屏模态）
+
+   层次：
+     1. .modal__backdrop  深色半透明遮罩（全屏）
+     2. .modal__panel     冷浅灰半透明内容卡（圆角 + 柔和投影）
+     3. 页面本体          由 .page[data-blurred] 做整体高斯模糊
+
+   交互与动画（与之前完全一致，未做改动）：
+     · 打开：遮罩淡入 → 图片淡入 + 轻微放大 → 右侧文字错开滑入
+     · 关闭：上述动画反向播放，结束后再卸载
+     · 关闭方式：点击遮罩 / 关闭按钮 / ESC
+   ========================================================= */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  padding: clamp(20px, 3vw, 48px);
+}
+
+/* ---------- 1. 外遮罩：保持深色半透明 ---------- */
+.modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(9, 9, 11, 0.9);
+  /* 遮罩自身也做一层模糊，垫在内容卡下面 */
+  backdrop-filter: blur(6px) saturate(0.9);
+  -webkit-backdrop-filter: blur(6px) saturate(0.9);
+  opacity: 0;
+  transition: opacity 0.45s var(--ease);
+}
+
+.modal[data-phase='open'] .modal__backdrop {
+  opacity: 1;
+}
+
+/* ---------- 2. 内容卡 ----------
+   卡片自身不再铺纯色：底色交给内部的 .modal__panelBg（Grainient 渐变图层），
+   这样弹窗和整页背景是同一套渐变语言。 */
+.modal__panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.72fr);
+  align-items: center;
+  gap: clamp(28px, 3.4vw, 80px);
+  width: min(1640px, 100%);
+  height: 100%;
+  margin: auto;
+  padding: clamp(22px, 2.4vw, 46px);
+  border-radius: 22px;
+  background: transparent;
+  /* 让渐变图层被圆角裁切 */
+  overflow: hidden;
+  isolation: isolate;
+  box-shadow: 0 42px 120px -44px rgba(9, 9, 11, 0.62), 0 2px 12px rgba(9, 9, 11, 0.08);
+  /* 卡片内统一基色，子元素再按层级加灰 */
+  color: #14181d;
+}
+
+/* 卡片内的 Grainient 渐变底。
+   0.9 的透明度让底下被高斯模糊的页面隐隐透上来，保留纵深感。 */
+.modal__panelBg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.9;
+}
+
+/* 内容全部压在渐变层之上 */
+.modal__media,
+.modal__body {
+  position: relative;
+  z-index: 1;
+}
+
+/* 没有配图时退化成单栏文字卡 */
+.modal[data-has-image] .modal__panel {
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.72fr);
+}
+
+.modal:not([data-has-image]) .modal__panel {
+  grid-template-columns: minmax(0, 1fr);
+  width: min(760px, 100%);
+}
+
+/* ---------- 关闭按钮：浅底上改用深色描边 ---------- */
+.modal__close {
+  position: absolute;
+  top: clamp(14px, 1.6vw, 28px);
+  right: clamp(14px, 1.6vw, 28px);
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(20, 24, 29, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #14181d;
+  cursor: pointer;
+  transition: background-color 0.35s, border-color 0.35s, transform 0.4s var(--ease);
+}
+
+.modal__close:hover {
+  background: #ffffff;
+  border-color: rgba(20, 24, 29, 0.4);
+  transform: scale(1.06);
+}
+
+/* ---------- 左栏：作品原图 ---------- */
+.modal__media {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  /* 打开：淡入 + 轻微放大（动画保持不变） */
+  opacity: 0;
+  transform: scale(0.955);
+  transition: opacity 0.8s var(--ease), transform 1.05s var(--ease);
+  transition-delay: 60ms;
+}
+
+.modal[data-phase='open'] .modal__media {
+  opacity: 1;
+  transform: none;
+}
+
+/* contain 保证任何比例都完整展示，绝不拉伸变形 */
+.modal__media img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid rgba(20, 24, 29, 0.06);
+  box-shadow: 0 26px 64px -30px rgba(20, 24, 29, 0.42);
+}
+
+/* ---------- 右栏：文字区 ---------- */
+.modal__body {
+  max-width: 560px;
+}
+
+/* 逐个错开滑入的通用单元，延迟由内联 --d 控制（动画保持不变） */
+.modal__reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.65s var(--ease), transform 0.75s var(--ease);
+  transition-delay: var(--d, 0ms);
+}
+
+.modal[data-phase='open'] .modal__reveal {
+  opacity: 1;
+  transform: none;
+}
+
+/* 关闭时不再错开，全部一起快速反向淡出 */
+.modal[data-phase='exit'] .modal__reveal {
+  transition-delay: 0ms;
+  transition-duration: 0.28s;
+}
+
+.modal[data-phase='exit'] .modal__media {
+  transition-delay: 0ms;
+  transition-duration: 0.3s;
+}
+
+/* ---- 文字层级：标题最深，正文中灰，标签最浅 ---- */
+.modal__title {
+  font-size: clamp(26px, 2.5vw, 44px);
+  font-weight: 600;
+  line-height: 1.16;
+  letter-spacing: -0.025em;
+  color: #14181d;
+}
+
+.modal__eyebrow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 18px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: rgba(20, 24, 29, 0.46);
+  text-transform: uppercase;
+}
+
+/* 序号保留暖橙点缀 */
+.modal__eyebrowNo {
+  color: var(--accent);
+}
+
+.modal__meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(20, 24, 29, 0.1);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: rgba(20, 24, 29, 0.46);
+}
+
+.modal__meta i {
+  width: 20px;
+  height: 1px;
+  background: rgba(20, 24, 29, 0.2);
+}
+
+.modal__desc {
+  margin-top: 22px;
+  font-size: 15.5px;
+  line-height: 1.95;
+  color: rgba(20, 24, 29, 0.72);
+}
+
+/* 标签：低对比深灰，保证在浅灰底上依然清晰可读 */
+.modal__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 30px;
+}
+
+.modal__tags li {
+  padding: 7px 15px;
+  border: 1px solid rgba(20, 24, 29, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: rgba(20, 24, 29, 0.62);
+}
+
+/* ---------- 背景页面整体高斯模糊 ---------- */
+.page {
+  transition: filter 0.5s var(--ease);
+}
+
+.page[data-blurred] {
+  filter: blur(16px) saturate(0.92);
+}
+
+/* 模糊后导航会失去 fixed 定位参照，干脆淡出，避免位置跳动被看见 */
+.page[data-blurred] .nav {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------- 自适应：窄屏改纵向单列，保留圆角与深色外框 ---------- */
+@media (max-width: 1080px) {
+  .modal {
+    padding: 12px;
+    /* 窄屏改成让整个模态滚动，卡片本身不再内部滚动，
+       这样卡片里的渐变底能完整覆盖整张卡 */
+    overflow-y: auto;
+  }
+
+  .modal__panel,
+  .modal[data-has-image] .modal__panel,
+  .modal:not([data-has-image]) .modal__panel {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 26px;
+    width: 100%;
+    height: auto;
+    min-height: calc(100vh - 24px);
+    min-height: calc(100dvh - 24px);
+    border-radius: 18px;
+    padding: 68px 20px 34px;
+  }
+
+  .modal__media {
+    height: auto;
+    max-height: 46vh;
+  }
+
+  .modal__media img {
+    max-height: 46vh;
+  }
+
+  .modal__body {
+    max-width: none;
+  }
+
+  /* 卡片内滚动时关闭按钮保持可见 */
+  .modal__close {
+    position: fixed;
+    top: 22px;
+    right: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal__media,
+  .modal__reveal,
+  .modal__backdrop,
+  .page {
+    transition: none;
+  }
+
+  .modal__media,
+  .modal__reveal {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -1,2 +1,19 @@
-# Auto detect text files and perform LF normalization
+# 统一换行符，避免 Windows / macOS / Linux 之间来回转换导致 diff 噪音
 * text=auto
+
+# 批处理文件必须是 CRLF，否则在 Windows 上可能出现诡异问题
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# 二进制文件不做任何转换
+*.mp4 binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+
+# 锁文件在 diff 里折叠显示
+package-lock.json -diff linguist-generated
